@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+/* Global font settings */
+* {
+  font-family: "exaclifont", "Comic Sans MS", "Papyrus", "Impact", "Arial Black", "Chalkboard SE", "Marker Felt", sans-serif;
+}
