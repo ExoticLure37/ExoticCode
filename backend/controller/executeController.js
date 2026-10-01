@@ -12,11 +12,11 @@ export const execute = async (req, res) => {
     const CLIENT_ID = process.env.CLIENT_ID;
     const CLIENT_SECRET = process.env.CLIENT_SECRET;
 
-    //  console.log(language);
-    //  console.log(code);
-    //  console.log(stdin);
-    //  console.log("calling jdoodle api ... ");
-    //  console.log(CLIENT_ID);
+    console.log(language);
+    console.log(code);
+    console.log(stdin);
+    console.log("calling jdoodle api ... ");
+    console.log(CLIENT_ID);
 
     const response = await fetch("https://api.jdoodle.com/v1/execute", {
       method: "POST",
