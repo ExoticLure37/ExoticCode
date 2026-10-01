@@ -30,8 +30,8 @@ export const execute = async (req, res) => {
         clientId: CLIENT_ID,
         clientSecret: CLIENT_SECRET,
         script: code,
-        language,
-        stdin,
+        language: language,
+        stdin: stdin,
         versionIndex: "0",
       }),
     });
