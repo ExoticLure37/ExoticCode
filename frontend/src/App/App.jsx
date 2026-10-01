@@ -6,6 +6,32 @@ import * as Y from "yjs";
 import { SocketIOProvider } from "y-socket.io";
 import DrawingBoard from "./DrawingBoard";
 import { SiCollaboraonline } from "react-icons/si";
+import CursorGrid from "./CursorGrid";
+import {
+  FiCode,
+  FiCopy,
+  FiEdit3,
+  FiLogIn,
+  FiLogOut,
+  FiMenu,
+  FiPlus,
+  FiX,
+} from "react-icons/fi";
+
+// Picks a stable avatar colour from a username
+const AVATAR_COLORS = [
+  "bg-blue-500",
+  "bg-orange-500",
+  "bg-emerald-500",
+  "bg-pink-500",
+  "bg-violet-500",
+  "bg-cyan-600",
+];
+const avatarColor = (name = "") => {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+};
 
 function App() {
   const editorRef = useRef(null);
@@ -21,6 +47,12 @@ function App() {
   const [provider, setProvider] = useState(null);
   const [showWelcome, setShowWelcome] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [stdin, setStdin] = useState("");
+  const [ioTab, setIoTab] = useState("input");
+  const [output, setOutput] = useState(null);
+  const [running, setRunning] = useState(false);
+
+  const RUNNABLE = ["nodejs", "html", "typescript", "python3", "java", "cpp"];
 
   const ydoc = useMemo(() => new Y.Doc(), []);
   const yText = useMemo(() => ydoc.getText("monaco"), [ydoc]);
@@ -35,19 +67,70 @@ function App() {
     );
   };
 
-  const handleJoin = (e) => {
-    e.preventDefault();
-    setUsername(e.target.username.value);
-    window.history.pushState({}, "", "?username=" + e.target.username.value);
+  const BASE_URL = import.meta.env.VITE_BASE_URL;
+  const runCode = async () => {
+    const code = editorRef.current?.getValue() ?? "";
+    setRunning(true);
+    setOutput(null);
+    setIoTab("output"); // jump to the output tab
+    try {
+      const res = await fetch(`${BASE_URL}/v1/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language, code, stdin }),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        setOutput({ error: result.message || "Execution failed" });
+      } else {
+        setOutput({ stdout: result.data, time: result.cpuTime });
+      }
+    } catch {
+      setOutput({ error: "Could not reach the server" });
+    } finally {
+      setRunning(false);
+    }
   };
 
-  const createRoom = () => {
-    const newRoomId = Math.random().toString(36).substring(2, 10).toUpperCase();
+  // Generates an 8-character random room id, e.g. "Q8K2V9X1"
+  const generateRoomId = () => {
+    const set1 = Math.random().toString(36).substring(2, 10).toUpperCase();
+    const set2 = Math.random().toString(36).substring(2, 10).toUpperCase();
+
+    const temp = set1 + set2;
+    let newRoomId = "";
+
+    for (let i = 0; i < temp.length; i++) {
+      if (i != 0 && i % 4 == 0) {
+        newRoomId += "-";
+      }
+      newRoomId += temp[i];
+    }
+
     setRoomId(newRoomId);
+    return newRoomId;
+  };
+
+  // Username screen: needs both a username and a room id
+  const handleJoin = (e) => {
+    e.preventDefault();
+    const name = e.target.elements.username.value.trim();
+    const room = roomId.trim().toUpperCase();
+    if (!name || !room) return;
+
+    setRoomId(room);
+    setUsername(name);
+    window.history.pushState({}, "", "?username=" + encodeURIComponent(name));
+  };
+
+  // Sidebar: create a brand new room
+  const createRoom = () => {
+    generateRoomId();
     setInputRoomId("");
     setShowJoinRoom(false);
   };
 
+  // Sidebar: join an existing room
   const joinRoom = () => {
     if (inputRoomId.trim()) {
       setRoomId(inputRoomId.trim().toUpperCase());
@@ -71,14 +154,9 @@ function App() {
 
   useEffect(() => {
     if (username && roomId) {
-      const newProvider = new SocketIOProvider(
-        "http://localhost:3000",
-        roomId,
-        ydoc,
-        {
-          autoConnect: true,
-        }
-      );
+      const newProvider = new SocketIOProvider(BASE_URL, roomId, ydoc, {
+        autoConnect: true,
+      });
 
       newProvider.awareness.setLocalStateField("user", { username, roomId });
 
@@ -113,62 +191,97 @@ function App() {
     }
   }, [username, roomId]);
 
+  /* ---------------------------- Welcome screen ---------------------------- */
   if (showWelcome) {
     return (
-      <main className="flex justify-center items-center bg-black p-4 w-full h-screen min-h-screen">
-        <div className="bg-gray-900 p-12 border border-gray-800 rounded-lg w-full max-w-4xl">
-          <div className="mb-12 py-3 text-center">
-            <h1 className="flex justify-center items-center gap-3 mb-4 font-bold text-white text-5xl">
-              <SiCollaboraonline/> ExoticCode
-            </h1>
-            <p className="text-gray-400 text-xl">Real-time collaborative coding & drawing platform</p>
-          </div>
+      <div className="relative bg-[#07080b] min-h-screen overflow-hidden">
+        <CursorGrid theme="dark" />
 
-          <div className="gap-6 grid md:grid-cols-3 mb-12">
-            <div className="bg-gray-800 p-6 border border-gray-700 rounded-lg">
-              <div className="mb-4 text-4xl">💻</div>
-              <h3 className="mb-2 font-bold text-white text-lg">Code Editor</h3>
-              <p className="text-gray-400 text-sm">Collaborative Monaco editor with syntax highlighting for multiple languages</p>
+        <main className="relative z-10 flex justify-center items-center p-4 w-full min-h-screen">
+          <div className="bg-gray-900/80 backdrop-blur-sm shadow-2xl p-8 sm:p-12 border border-gray-800 rounded-2xl w-full max-w-4xl">
+            <div className="mb-12 text-center">
+              <h1 className="flex justify-center items-center gap-3 mb-4 font-bold text-white text-4xl sm:text-5xl">
+                <SiCollaboraonline /> ExoticCode
+              </h1>
+              <p className="text-gray-400 text-lg sm:text-xl">
+                Real-time collaborative coding & drawing platform
+              </p>
             </div>
-            <div className="bg-gray-800 p-6 border border-gray-700 rounded-lg">
-              <div className="mb-4 text-4xl">🎨</div>
-              <h3 className="mb-2 font-bold text-white text-lg">Drawing Board</h3>
-              <p className="text-gray-400 text-sm">Shared canvas for sketching diagrams, flowcharts, and visual collaboration</p>
-            </div>
-            <div className="bg-gray-800 p-6 border border-gray-700 rounded-lg">
-              <div className="mb-4 text-4xl">⚡</div>
-              <h3 className="mb-2 font-bold text-white text-lg">Real-time Sync</h3>
-              <p className="text-gray-400 text-sm">Instant synchronization across all users in the room</p>
-            </div>
-          </div>
 
-          <div className="text-center">
-            <button
-              onClick={() => setShowWelcome(false)}
-              className="bg-white hover:bg-gray-200 active:bg-gray-300 shadow-lg px-8 py-4 rounded-lg w-full max-w-xs font-bold text-black hover:scale-105 active:scale-95 transition-all transform"
-            >
-              Get Started
-            </button>
+            <div className="gap-6 grid md:grid-cols-3 mb-12">
+              <div className="bg-gray-800/70 p-6 border border-gray-700 rounded-xl">
+                <div className="mb-4 text-4xl">💻</div>
+                <h3 className="mb-2 font-bold text-white text-lg">
+                  Code Editor
+                </h3>
+                <p className="text-gray-400 text-sm">
+                  Collaborative editor with syntax highlighting for multiple
+                  languages
+                </p>
+              </div>
+
+              <div className="bg-gray-800/70 p-6 border border-gray-700 rounded-xl">
+                <div className="mb-4 text-4xl">🎨</div>
+                <h3 className="mb-2 font-bold text-white text-lg">
+                  Drawing Board
+                </h3>
+                <p className="text-gray-400 text-sm">
+                  Shared canvas for sketching diagrams, flowcharts, and visual
+                  collaboration
+                </p>
+              </div>
+
+              <div className="bg-gray-800/70 p-6 border border-gray-700 rounded-xl">
+                <div className="mb-4 text-4xl">⚡</div>
+                <h3 className="mb-2 font-bold text-white text-lg">
+                  Real-time Sync
+                </h3>
+                <p className="text-gray-400 text-sm">
+                  Instant synchronization across all users in the room
+                </p>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <button
+                onClick={() => setShowWelcome(false)}
+                className="bg-white hover:bg-gray-200 active:bg-gray-300 shadow-lg px-8 py-4 rounded-xl w-full max-w-xs font-bold text-black hover:scale-105 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 transition-all transform"
+              >
+                Get Started
+              </button>
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     );
   }
 
+  /* ---------------------------- Username screen --------------------------- */
   if (!username) {
     return (
-      <main className="flex justify-center items-center bg-black p-4 w-full h-screen min-h-screen">
-        <div className="bg-gray-900 shadow-2xl p-8 border border-gray-800 rounded-lg w-full max-w-md">
+      <main className="relative flex justify-center items-center bg-[#07080b] p-4 w-full min-h-screen overflow-hidden">
+        <CursorGrid theme="dark" />
+
+        <div className="relative z-10 bg-gray-900/80 backdrop-blur-sm shadow-2xl p-8 border border-gray-800 rounded-lg w-full max-w-md">
           <div className="mb-8 text-center">
-            <h1 className="flex justify-center items-center gap-2 mb-2 font-bold text-white text-4xl"><SiCollaboraonline/> ExoticCode</h1>
-            <p className="text-gray-400">Real-time collaborative coding & drawing</p>
+            <h1 className="flex justify-center items-center gap-2 mb-2 font-bold text-white text-4xl">
+              <SiCollaboraonline /> ExoticCode
+            </h1>
+            <p className="text-gray-400">
+              Real-time collaborative coding & drawing
+            </p>
           </div>
+
           <form onSubmit={handleJoin} className="flex flex-col gap-4">
             <div>
-              <label className="block mb-2 font-medium text-gray-300 text-sm">
+              <label
+                htmlFor="username"
+                className="block mb-2 font-medium text-gray-300 text-sm"
+              >
                 Enter your username
               </label>
               <input
+                id="username"
                 type="text"
                 placeholder="e.g. JohnDoe"
                 className="bg-gray-800 p-4 border border-gray-700 focus:border-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 w-full text-white transition-all placeholder-gray-500"
@@ -176,6 +289,36 @@ function App() {
                 required
               />
             </div>
+
+            <div>
+              <label
+                htmlFor="roomId"
+                className="block mb-2 font-medium text-gray-300 text-sm"
+              >
+                Enter meeting id
+              </label>
+              <input
+                id="roomId"
+                type="text"
+                placeholder="e.g. 1SZMW3ES"
+                className="bg-gray-800 p-4 border border-gray-700 focus:border-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 w-full text-white uppercase transition-all placeholder-gray-500"
+                name="roomId"
+                value={roomId}
+                onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+                required
+              />
+              <p className="flex justify-between items-center py-2 font-thin text-gray-400 text-sm">
+                Don't have a meeting id?
+                <button
+                  type="button"
+                  onClick={generateRoomId}
+                  className="hover:scale-105 underline"
+                >
+                  Generate here
+                </button>
+              </p>
+            </div>
+
             <button
               type="submit"
               className="bg-white hover:bg-gray-200 active:bg-gray-300 shadow-lg p-4 rounded-lg w-full font-bold text-black hover:scale-105 active:scale-95 transition-all transform"
@@ -188,49 +331,88 @@ function App() {
     );
   }
 
+  /* ------------------------------ Main screen ----------------------------- */
   return (
-    <main className="relative flex gap-4 bg-black p-4 w-full h-screen">
+    <main className="relative flex gap-3 bg-[#07080b] p-3 w-full h-screen overflow-hidden">
+      {/* Backdrop: only needed when the sidebar is a drawer on small screens */}
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
-          className="z-40 fixed inset-0 bg-black/50"
+          className="lg:hidden z-40 fixed inset-0 bg-black/60"
         />
       )}
-      <aside className={`flex flex-col bg-gray-900 shadow-2xl border border-gray-800 rounded-lg w-80 h-full absolute left-4 top-4 bottom-4 z-50 transition-all duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="px-13 border-gray-800 border-b">
-          <h2 className="mb-1 px-3 font-bold text-white text-2xl">ExoticCode</h2>
-          <p className="px-3 text-gray-400 text-sm">Welcome, {username}</p>
+
+      <aside
+        className={`fixed lg:static inset-y-3 left-3 z-50 flex flex-col w-72 shrink-0 bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl transition-transform duration-300 ${
+          sidebarOpen ? "translate-x-0" : "translate-x-[110%] lg:hidden"
+        }`}
+      >
+        {/* Brand + close */}
+        <div className="flex justify-between items-center px-5 py-4 border-gray-800 border-b">
+          <div className="flex items-center gap-2.5">
+            <span className="flex justify-center items-center bg-white rounded-lg w-8 h-8 text-black">
+              <SiCollaboraonline />
+            </span>
+            <span className="font-bold text-white text-lg tracking-tight">
+              ExoticCode
+            </span>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="hover:bg-white/10 p-2 rounded-lg text-gray-400 hover:text-white transition-colors"
+            title="Close sidebar"
+            aria-label="Close sidebar"
+          >
+            <FiX />
+          </button>
+        </div>
+
+        {/* Signed-in user */}
+        <div className="flex items-center gap-3 px-5 py-4 border-gray-800 border-b">
+          <div
+            className={`flex justify-center items-center rounded-full w-10 h-10 font-bold text-white ${avatarColor(username)}`}
+          >
+            {username.charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-white truncate">{username}</p>
+            <p className="text-gray-500 text-xs">
+              {roomId ? "In a room" : "Not in a room"}
+            </p>
+          </div>
         </div>
 
         {!roomId ? (
-          <div className="flex flex-col flex-1 gap-4 p-6">
-            <div>
-              <h3 className="mb-3 font-semibold text-white">Create or Join Room</h3>
-              <button
-                onClick={createRoom}
-                className="bg-white hover:bg-gray-200 active:bg-gray-300 shadow-md mb-3 p-3 rounded-lg w-full font-semibold text-black hover:scale-105 active:scale-95 transition-all"
-              >
-                Generate Random Room ID
-              </button>
-              <button
-                onClick={() => setShowJoinRoom(!showJoinRoom)}
-                className="bg-gray-800 hover:bg-gray-700 active:bg-gray-600 shadow-md p-3 border border-gray-700 rounded-lg w-full font-semibold text-white hover:scale-105 active:scale-95 transition-all"
-              >
-                Join Existing Room
-              </button>
-            </div>
+          /* ------------------------- No room yet ------------------------- */
+          <div className="flex flex-col flex-1 gap-3 p-5">
+            <p className="text-gray-400 text-sm">
+              Start a new session, or join one with a code.
+            </p>
+            <button
+              onClick={createRoom}
+              className="flex justify-center items-center gap-2 bg-white hover:bg-gray-200 active:scale-95 p-3 rounded-xl font-semibold text-black transition-all"
+            >
+              <FiPlus /> New room
+            </button>
+            <button
+              onClick={() => setShowJoinRoom(!showJoinRoom)}
+              className="flex justify-center items-center gap-2 bg-gray-800 hover:bg-gray-700 active:scale-95 p-3 border border-gray-700 rounded-xl font-semibold text-white transition-all"
+            >
+              <FiLogIn /> Join with a code
+            </button>
             {showJoinRoom && (
-              <div>
+              <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Enter Room ID"
+                  placeholder="Room ID"
                   value={inputRoomId}
                   onChange={(e) => setInputRoomId(e.target.value.toUpperCase())}
-                  className="flex-1 bg-gray-800 p-3 border border-gray-700 focus:border-gray-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-white transition-all placeholder-gray-500"
+                  onKeyDown={(e) => e.key === "Enter" && joinRoom()}
+                  className="flex-1 bg-gray-800 p-3 border border-gray-700 focus:border-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-500 w-full min-w-0 font-mono text-white tracking-widest transition-all placeholder-gray-500"
                 />
                 <button
                   onClick={joinRoom}
-                  className="bg-white hover:bg-gray-200 active:bg-gray-300 shadow-md px-4 py-2 py-3 rounded-lg font-bold text-black whitespace-nowrap hover:scale-105 active:scale-95 transition-all"
+                  className="bg-white hover:bg-gray-200 active:scale-95 px-4 rounded-xl font-bold text-black transition-all"
                 >
                   Join
                 </button>
@@ -238,99 +420,110 @@ function App() {
             )}
           </div>
         ) : (
+          /* --------------------------- In a room --------------------------- */
           <>
-            <div className="p-4 border-gray-800 border-b">
-              <div className="bg-gray-800 p-4 rounded-lg">
-                <p className="mb-1 text-gray-400 text-xs">Room ID</p>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-white text-xl">
-                    {roomId}
-                  </span>
-                  <button
-                    onClick={copyRoomId}
-                    className="bg-gray-700 hover:bg-gray-600 active:bg-gray-500 p-2 rounded-lg hover:scale-110 active:scale-95 transition-all"
-                    title="Copy Room ID"
-                  >
-                    📋
-                  </button>
-                </div>
+            {/* Room ID */}
+            <div className="px-5 py-4 border-gray-800 border-b">
+              <p className="mb-2 text-gray-500 text-xs">Room ID</p>
+              <div className="flex justify-between items-center gap-2 bg-gray-800/70 px-3 py-2 border border-gray-700 rounded-xl">
+                <span className="font-mono font-bold text-white tracking-widest">
+                  {roomId}
+                </span>
+                <button
+                  onClick={copyRoomId}
+                  className="hover:bg-white/10 p-2 rounded-lg text-gray-300 hover:text-white transition-colors"
+                  title="Copy Room ID"
+                  aria-label="Copy Room ID"
+                >
+                  <FiCopy />
+                </button>
               </div>
             </div>
 
-            <div className="p-4 border-gray-800 border-b">
-              <h3 className="mb-3 font-semibold text-white">Online Users ({users.length})</h3>
-              <ul className="space-y-2 max-h-40 overflow-y-auto">
+            {/* Tools */}
+            <nav className="px-3 py-4 border-gray-800 border-b">
+              <p className="mb-2 px-2 text-gray-500 text-xs">Tools</p>
+              <div className="space-y-1">
+                {[
+                  { id: "editor", label: "Code editor", icon: <FiCode /> },
+                  { id: "drawing", label: "Drawing board", icon: <FiEdit3 /> },
+                ].map((tool) => (
+                  <button
+                    key={tool.id}
+                    onClick={() => setCurrentView(tool.id)}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg w-full font-medium text-left transition-colors ${
+                      currentView === tool.id
+                        ? "bg-white/10 text-white ring-1 ring-white/10"
+                        : "text-gray-400 hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
+                    {tool.icon}
+                    {tool.label}
+                  </button>
+                ))}
+              </div>
+            </nav>
+
+            {/* Online users */}
+            <div className="flex flex-col flex-1 px-3 py-4 min-h-0">
+              <p className="flex justify-between items-center mb-2 px-2 text-gray-500 text-xs">
+                Online
+                <span className="bg-gray-800 px-2 py-0.5 rounded-full text-gray-300">
+                  {users.length}
+                </span>
+              </p>
+              <ul className="space-y-1 pr-1 overflow-y-auto">
                 {users.map((user, index) => (
                   <li
                     key={index}
-                    className={`p-3 rounded-lg flex items-center gap-3 transition-all hover:scale-102 ${
-                      user.username === username
-                        ? "bg-gray-700 border border-gray-600"
-                        : "bg-gray-800 hover:bg-gray-700"
-                    }`}
+                    className="flex items-center gap-3 hover:bg-white/5 px-2 py-2 rounded-lg transition-colors"
                   >
-                    <div className="flex justify-center items-center bg-gray-600 shadow-md rounded-full w-8 h-8 font-bold text-white text-sm">
-                      {user.username.charAt(0).toUpperCase()}
+                    <div className="relative">
+                      <div
+                        className={`flex justify-center items-center rounded-full w-8 h-8 font-bold text-white text-sm ${avatarColor(user.username)}`}
+                      >
+                        {user.username.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="right-0 bottom-0 absolute bg-emerald-400 border-2 border-gray-900 rounded-full w-2.5 h-2.5" />
                     </div>
-                    <span className="font-medium text-white">{user.username}</span>
+                    <span className="text-gray-200 text-sm truncate">
+                      {user.username}
+                    </span>
                     {user.username === username && (
-                      <span className="ml-auto text-gray-400 text-xs">(You)</span>
+                      <span className="ml-auto text-gray-500 text-xs">you</span>
                     )}
                   </li>
                 ))}
               </ul>
             </div>
-                
-            <div className="p-4 border-gray-800 border-b">
-              <h3 className="mb-3 font-semibold text-white">Tools</h3>
-              <div className="space-y-2">
-                <button
-                  onClick={() => setCurrentView("editor")}
-                  className={`w-full p-3 rounded-lg font-semibold transition-all flex items-center gap-3 hover:scale-105 active:scale-95 ${
-                    currentView === "editor"
-                      ? "bg-white text-black shadow-md"
-                      : "bg-gray-800 text-white hover:bg-gray-700 border border-gray-700"
-                  }`}
-                >
-                  <span>💻</span> Code Editor
-                </button>
-                <button
-                  onClick={() => setCurrentView("drawing")}
-                  className={`w-full p-3 rounded-lg font-semibold transition-all flex items-center gap-3 hover:scale-105 active:scale-95 ${
-                    currentView === "drawing"
-                      ? "bg-white text-black shadow-md"
-                      : "bg-gray-800 text-white hover:bg-gray-700 border border-gray-700"
-                  }`}
-                >
-                  <span>🎨</span> Drawing Board
-                </button>
-              </div>
-            </div>
 
-            <div className="mt-auto p-4">
+            {/* Leave */}
+            <div className="p-3 border-gray-800 border-t">
               <button
                 onClick={leaveRoom}
-                className="bg-gray-800 hover:bg-gray-700 active:bg-gray-600 shadow-md p-3 border border-gray-700 rounded-lg w-full font-semibold text-white hover:scale-105 active:scale-95 transition-all"
+                className="flex justify-center items-center gap-2 hover:bg-red-500/10 p-3 border border-gray-700 hover:border-red-500/40 rounded-xl w-full font-semibold text-gray-300 hover:text-red-400 transition-colors"
               >
-                Leave Room
+                <FiLogOut /> Leave room
               </button>
             </div>
-
           </>
         )}
       </aside>
 
-      <button
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="top-4 left-4 z-50 absolute bg-gray-900 hover:bg-gray-800 shadow-md p-3 border border-gray-700 rounded-lg text-white hover:scale-105 active:scale-95 transition-all"
-        title="Toggle Sidebar"
-      >
-        {sidebarOpen ? '✕' : '☰'}
-      </button>
+      <section className="relative flex-1 bg-gray-900 shadow-2xl border border-gray-800 rounded-2xl min-w-0 overflow-hidden">
+        {!sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="top-3 left-3 z-30 absolute bg-gray-800 hover:bg-gray-700 p-2.5 border border-gray-700 rounded-lg text-white transition-colors"
+            title="Open sidebar"
+            aria-label="Open sidebar"
+          >
+            <FiMenu />
+          </button>
+        )}
 
-      <section className="flex-2 bg-gray-900 shadow-2xl px-11 border border-gray-800 rounded-lg overflow-hidden">
         {!roomId ? (
-          <div className="flex justify-center items-center h-full">
+          <div className="flex justify-center items-center p-6 h-full">
             <div className="text-center">
               <div className="mb-4 text-6xl">🚀</div>
               <h2 className="mb-2 font-bold text-white text-2xl">
@@ -342,33 +535,103 @@ function App() {
             </div>
           </div>
         ) : currentView === "editor" ? (
-          <div className="flex flex-col h-full">
-            <div className="flex items-center gap-4 bg-gray-800 p-4 border-gray-700 border-b">
-              <label className="font-medium text-white">Language:</label>
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="bg-gray-700 p-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 text-white"
+          <div className="flex lg:flex-row flex-col h-full">
+            {/* ---------- Left: language bar + editor ---------- */}
+            <div className="flex flex-col flex-1 min-w-0 min-h-0">
+              <div
+                className={`flex items-center gap-4 bg-gray-800 p-4 border-gray-700 border-b ${
+                  !sidebarOpen ? "pl-16" : ""
+                }`}
               >
-                <option value="javascript">JavaScript</option>
-                <option value="typescript">TypeScript</option>
-                <option value="python">Python</option>
-                <option value="java">Java</option>
-                <option value="cpp">C++</option>
-                <option value="html">HTML</option>
-                <option value="css">CSS</option>
-                <option value="json">JSON</option>
-                <option value="markdown">Markdown</option>
-              </select>
+                <label className="font-medium text-white">Language:</label>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="bg-gray-700 p-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 text-white"
+                >
+                  <option value="nodejs">JavaScript</option>
+                  <option value="typescript">TypeScript</option>
+                  <option value="python3">Python</option>
+                  <option value="java">Java</option>
+                  <option value="cpp">C++</option>
+                  <option value="html">HTML</option>
+                  <option value="html">CSS</option>
+                  {/* <option value="json">JSON</option> */}
+                  {/* <option value="markdown">Markdown</option> */}
+                </select>
+
+                <button
+                  onClick={runCode}
+                  disabled={running || !RUNNABLE.includes(language)}
+                  className="ml-auto bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 px-4 py-2 rounded-lg font-semibold text-black transition-colors disabled:cursor-not-allowed"
+                >
+                  {running ? "Running…" : "▶ Run"}
+                </button>
+              </div>
+
+              <div className="flex-1 min-h-0">
+                <Editor
+                  height="100%"
+                  language={language}
+                  defaultValue="// Start coding together!\n// All changes are synced in real-time"
+                  theme="vs-dark"
+                  onMount={handleMount}
+                  key={language}
+                />
+              </div>
             </div>
-            <Editor
-              height="100%"
-              language={language}
-              defaultValue="// Start coding together!\n// All changes are synced in real-time"
-              theme="vs-dark"
-              onMount={handleMount}
-              key={language}
-            />
+
+            {/* ---------- Right: Input / Output tabs ---------- */}
+            <div className="flex flex-col bg-gray-950 border-gray-700 border-t lg:border-t-0 lg:border-l w-full lg:w-96 h-64 lg:h-auto shrink-0">
+              <div className="flex bg-gray-800 border-gray-700 border-b">
+                {["input", "output"].map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setIoTab(tab)}
+                    className={`flex-1 px-4 py-3 text-sm font-semibold capitalize transition-colors border-b-2 ${
+                      ioTab === tab
+                        ? "border-white text-white"
+                        : "border-transparent text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex-1 p-4 min-h-0 overflow-auto">
+                {ioTab === "input" ? (
+                  <textarea
+                    value={stdin}
+                    onChange={(e) => setStdin(e.target.value)}
+                    placeholder="Program input (stdin), one value per line"
+                    spellCheck={false}
+                    className="bg-transparent focus:outline-none w-full h-full font-mono text-gray-200 text-sm resize-none placeholder-gray-600"
+                  />
+                ) : (
+                  <>
+                    {output?.status && (
+                      <p className="mb-2 text-gray-500 text-xs">
+                        {output.status}
+                        {output.time && ` · ${output.time}s`}
+                      </p>
+                    )}
+                    <pre className="font-mono text-gray-200 text-sm whitespace-pre-wrap">
+                      {running && "Running…"}
+                      {!running &&
+                        !output &&
+                        "Press Run to see the output here."}
+                      {output?.error}
+                      {output?.compile_output}
+                      {output?.stderr && (
+                        <span className="text-red-400">{output.stderr}</span>
+                      )}
+                      {output?.stdout}
+                    </pre>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         ) : (
           <DrawingBoard ydoc={ydoc} />

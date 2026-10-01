@@ -15,13 +15,13 @@ function DrawingBoard({ ydoc }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
-    
+
     const handleResize = () => {
       canvas.width = canvas.parentElement.clientWidth;
       canvas.height = canvas.parentElement.clientHeight;
       redrawCanvas();
     };
-    
+
     handleResize();
     window.addEventListener("resize", handleResize);
 
@@ -54,8 +54,10 @@ function DrawingBoard({ ydoc }) {
   const drawShape = (ctx, shape) => {
     ctx.strokeStyle = shape.color;
     ctx.fillStyle = shape.color;
-    ctx.lineWidth = shape.type === "pencil" && shape.color === "#ffffff" ? 20 : 2;
-    ctx.lineCap = shape.type === "pencil" && shape.color === "#ffffff" ? "round" : "butt";
+    ctx.lineWidth =
+      shape.type === "pencil" && shape.color === "#ffffff" ? 20 : 2;
+    ctx.lineCap =
+      shape.type === "pencil" && shape.color === "#ffffff" ? "round" : "butt";
     ctx.beginPath();
 
     if (shape.type === "pencil") {
@@ -115,7 +117,7 @@ function DrawingBoard({ ydoc }) {
       }
       ctx.lineTo(pos.x, pos.y);
       ctx.stroke();
-    } 
+    }
     // else if (tool === "eraser") {
     //   redrawCanvas();
     //   ctx.strokeStyle = "#ffffff";
@@ -128,7 +130,7 @@ function DrawingBoard({ ydoc }) {
     //   }
     //   ctx.lineTo(pos.x, pos.y);
     //   ctx.stroke();
-    // } 
+    // }
     else if (tool === "rectangle" || tool === "circle" || tool === "line") {
       redrawCanvas();
       ctx.strokeStyle = color;
@@ -140,11 +142,11 @@ function DrawingBoard({ ydoc }) {
           startPos.x,
           startPos.y,
           pos.x - startPos.x,
-          pos.y - startPos.y
+          pos.y - startPos.y,
         );
       } else if (tool === "circle") {
         const radius = Math.sqrt(
-          Math.pow(pos.x - startPos.x, 2) + Math.pow(pos.y - startPos.y, 2)
+          Math.pow(pos.x - startPos.x, 2) + Math.pow(pos.y - startPos.y, 2),
         );
         ctx.arc(startPos.x, startPos.y, radius, 0, Math.PI * 2);
         ctx.stroke();
@@ -171,7 +173,7 @@ function DrawingBoard({ ydoc }) {
         id: Date.now(),
       };
       yShapes.push([newShape]);
-    } 
+    }
     // else if (tool === "eraser") {
     //   const newShape = {
     //     type: "pencil",
@@ -180,7 +182,7 @@ function DrawingBoard({ ydoc }) {
     //     id: Date.now(),
     //   };
     //   yShapes.push([newShape]);
-    // } 
+    // }
     else if (tool === "rectangle") {
       const newShape = {
         type: "rectangle",
@@ -194,7 +196,7 @@ function DrawingBoard({ ydoc }) {
       yShapes.push([newShape]);
     } else if (tool === "circle") {
       const radius = Math.sqrt(
-        Math.pow(pos.x - startPos.x, 2) + Math.pow(pos.y - startPos.y, 2)
+        Math.pow(pos.x - startPos.x, 2) + Math.pow(pos.y - startPos.y, 2),
       );
       const newShape = {
         type: "circle",
@@ -229,7 +231,7 @@ function DrawingBoard({ ydoc }) {
 
   return (
     <div className="flex flex-col bg-white h-full">
-      <div className="flex flex-wrap items-center gap-2 bg-gray-900 p-4 border border-gray-800">
+      <div className="flex flex-wrap pl-16 items-center gap-2 bg-gray-900 p-4 border border-gray-800">
         <button
           onClick={() => setTool("pencil")}
           className={`px-4 py-2 rounded-lg font-semibold transition-all hover:scale-105 active:scale-95 ${
