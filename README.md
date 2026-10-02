@@ -2,7 +2,7 @@
 
 A collaborative coding and drawing platform designed for real-time teamwork, planning, and quick technical ideation in one shared space.
 
-![ExoticCode home hero](./frontend/public/exoticcode-hero.svg)
+![ExoticCode home hero](./frontend/public/welcome_page.png)
 
 ## What the app does
 
