@@ -46,7 +46,9 @@ function App() {
   const [showJoinRoom, setShowJoinRoom] = useState(false);
   const [provider, setProvider] = useState(null);
   const [showWelcome, setShowWelcome] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window === "undefined" || window.innerWidth >= 1024,
+  );
   const [stdin, setStdin] = useState("");
   const [ioTab, setIoTab] = useState("input");
   const [output, setOutput] = useState(null);
@@ -92,7 +94,7 @@ function App() {
     }
   };
 
-  // Generates an 8-character random room id, e.g. "Q8K2V9X1"
+  // Generates an 8x8-character random room id
   const generateRoomId = () => {
     const set1 = Math.random().toString(36).substring(2, 10).toUpperCase();
     const set2 = Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -111,7 +113,7 @@ function App() {
     return newRoomId;
   };
 
-  // Username screen: needs both a username and a room id
+  // Username screen
   const handleJoin = (e) => {
     e.preventDefault();
     const name = e.target.elements.username.value.trim();
@@ -123,7 +125,7 @@ function App() {
     window.history.pushState({}, "", "?username=" + encodeURIComponent(name));
   };
 
-  // Sidebar: create a brand new room
+  // Sidebar
   const createRoom = () => {
     generateRoomId();
     setInputRoomId("");
@@ -334,7 +336,6 @@ function App() {
   /* ------------------------------ Main screen ----------------------------- */
   return (
     <main className="relative flex gap-3 bg-[#07080b] p-3 w-full h-screen overflow-hidden">
-      {/* Backdrop: only needed when the sidebar is a drawer on small screens */}
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
@@ -344,10 +345,11 @@ function App() {
 
       <aside
         className={`fixed lg:static inset-y-3 left-3 z-50 flex flex-col w-72 shrink-0 bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl transition-transform duration-300 ${
-          sidebarOpen ? "translate-x-0" : "translate-x-[110%] lg:hidden"
+          sidebarOpen
+            ? "translate-x-0"
+            : "translate-x-[120%] invisible lg:hidden lg:visible"
         }`}
       >
-        {/* Brand + close */}
         <div className="flex justify-between items-center px-5 py-4 border-gray-800 border-b">
           <div className="flex items-center gap-2.5">
             <span className="flex justify-center items-center bg-white rounded-lg w-8 h-8 text-black">
@@ -422,7 +424,6 @@ function App() {
         ) : (
           /* --------------------------- In a room --------------------------- */
           <>
-            {/* Room ID */}
             <div className="px-5 py-4 border-gray-800 border-b">
               <p className="mb-2 text-gray-500 text-xs">Room ID</p>
               <div className="flex justify-between items-center gap-2 bg-gray-800/70 px-3 py-2 border border-gray-700 rounded-xl">
@@ -440,7 +441,6 @@ function App() {
               </div>
             </div>
 
-            {/* Tools */}
             <nav className="px-3 py-4 border-gray-800 border-b">
               <p className="mb-2 px-2 text-gray-500 text-xs">Tools</p>
               <div className="space-y-1">
@@ -497,7 +497,6 @@ function App() {
               </ul>
             </div>
 
-            {/* Leave */}
             <div className="p-3 border-gray-800 border-t">
               <button
                 onClick={leaveRoom}
@@ -536,7 +535,6 @@ function App() {
           </div>
         ) : currentView === "editor" ? (
           <div className="flex lg:flex-row flex-col h-full">
-            {/* ---------- Left: language bar + editor ---------- */}
             <div className="flex flex-col flex-1 min-w-0 min-h-0">
               <div
                 className={`flex items-center gap-4 bg-gray-800 p-4 border-gray-700 border-b ${
@@ -581,7 +579,7 @@ function App() {
               </div>
             </div>
 
-            {/* ---------- Right: Input / Output tabs ---------- */}
+            {/* ---------- Input / Output tabs ---------- */}
             <div className="flex flex-col bg-gray-950 border-gray-700 border-t lg:border-t-0 lg:border-l w-full lg:w-96 h-64 lg:h-auto shrink-0">
               <div className="flex bg-gray-800 border-gray-700 border-b">
                 {["input", "output"].map((tab) => (
