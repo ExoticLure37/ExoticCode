@@ -21,6 +21,8 @@ ExoticCode combines three core collaboration tools in a single workspace:
 4. The backend exposes a `/v1/execute` endpoint that sends code to the JDoodle API and returns stdout, stderr, and runtime metadata.
 5. The drawing board and editor are both tied to the same collaborative room state so teammates can work together without switching tools.
 
+![ExoticCode Architecture](./frontend/public/architecture.png)
+
 ## Project structure
 
 - `frontend/` — React + Vite application for the editor, landing page, collaboration UI, and drawing canvas
